@@ -38,18 +38,36 @@ import tempfile
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Optional, Dict
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+# from sandbox_fusion.sandbox.runners.types import CommandRunStatus
+# from sandbox_fusion.sandbox.server import RunStatus
 
 # ---------------- Pydantic models ----------------
 
+# https://github.com/bytedance/SandboxFusion/blob/5e37f71a5f61bd7dddd1fa867b5cb7be01a1bbb6/sandbox/server/sandbox_api.py#L51
 class RunStatus(str, Enum):
-    """Execution outcome."""
-    success = "success"
-    timeout = "timeout"
-    runtime_error = "runtime_error"
+    # all command finished successfully
+    Success = 'Success'
+    # one of the process has non-zero return code
+    Failed = 'Failed'
+    # error on sandbox side
+    SandboxError = 'SandboxError'
 
+# https://github.com/bytedance/SandboxFusion/blob/5e37f71a5f61bd7dddd1fa867b5cb7be01a1bbb6/sandbox/runners/types.py#L21
+class CommandRunStatus(str, Enum):
+    Finished = 'Finished'
+    Error = 'Error'
+    TimeLimitExceeded = 'TimeLimitExceeded'
+
+class CommandRunResult(BaseModel):
+    status: CommandRunStatus
+    execution_time: Optional[float] = None
+    return_code: Optional[int] = None
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
 
 class RunCodeRequest(BaseModel):
     """Incoming JSON body from the client."""
@@ -60,6 +78,13 @@ class RunCodeRequest(BaseModel):
     compile_timeout: float = 1.0  # kept for sdk compatibility, unused here
     run_timeout: float = 3.0
 
+class RunCodeResponse(BaseModel):
+    status: RunStatus
+    message: str
+    compile_result: Optional[CommandRunResult] = None
+    run_result: Optional[CommandRunResult] = None
+    executor_pod_name: Optional[str] = None
+    files: Dict[str, str] = {}
 
 class RunResult(BaseModel):
     """JSON response back to the client."""
@@ -83,7 +108,7 @@ async def _run_in_firejail(code: str, timeout: float, stdin_data: str = "") -> d
     cmd = [
         "firejail",
         "--quiet",
-        "--profile=/etc/firejail/sandbox.profile",
+        # "--profile=/etc/firejail/sandbox.profile",
         f"--private={workdir}",
         "--net=none",              # disable network
         "--",
@@ -96,6 +121,7 @@ async def _run_in_firejail(code: str, timeout: float, stdin_data: str = "") -> d
     clean_env = {k: os.environ[k] for k in whitelist if k in os.environ}
 
     # 4) Launch subprocess under asyncio, enforce wall-clock timeout
+    print(f"{cmd}")
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         stdin=asyncio.subprocess.PIPE,
@@ -111,26 +137,30 @@ async def _run_in_firejail(code: str, timeout: float, stdin_data: str = "") -> d
             proc.communicate(input=input_bytes),
             timeout=timeout
         )
+        print(f"EXECUTION ==== {stdout} {stderr} {proc.returncode}")
     except asyncio.TimeoutError:
         proc.kill()
         await proc.wait()
         shutil.rmtree(workdir, ignore_errors=True)
-        return {
-            "status": RunStatus.timeout,
+        return RunStatus.Failed, {
+            "status": CommandRunStatus.TimeLimitExceeded,
             "stdout": "",
             "stderr": "Timeout\n",
         }
-
-    status = RunStatus.success if proc.returncode == 0 else RunStatus.runtime_error
+    
+    command_status = CommandRunStatus.Finished if proc.returncode == 0 else CommandRunStatus.Error
+    status = RunStatus.Success if proc.returncode == 0 else RunStatus.Failed
 
     # 5) Clean up tmpfs directory
     shutil.rmtree(workdir, ignore_errors=True)
 
-    return {
-        "status": status,
-        "stdout": stdout.decode(),
-        "stderr": stderr.decode(),
-    }
+    return status, CommandRunResult(
+        status=command_status,
+        execution_time=0,
+        return_code=proc.returncode,
+        stdout=stdout.decode(),
+        stderr=stderr.decode(),
+    )
 
 
 # ---------------- FastAPI wiring ----------------
@@ -139,7 +169,7 @@ app = FastAPI()
 POOL = asyncio.Semaphore(200)  # gate per-process concurrency; tune to your CPU
 
 
-@app.post("/faas/sandbox/", response_model=RunResult)
+@app.post("/faas/sandbox/run_code", response_model=RunCodeResponse)
 async def run_code(req: RunCodeRequest):
     """HTTP endpoint: compatible with the Seed-Sandbox client SDK."""
 
@@ -147,6 +177,17 @@ async def run_code(req: RunCodeRequest):
         raise HTTPException(400, "Only Python is supported in this minimal demo.")
 
     async with POOL:
-        result = await _run_in_firejail(req.code, req.run_timeout, req.stdin)
+        command_result, result = await _run_in_firejail(req.code, req.run_timeout, req.stdin)
 
-    return RunResult(status=result["status"], run_result=result, created_at=datetime.utcnow())
+    return RunCodeResponse(
+        status=command_result,
+        message="",
+        compile_result=None,
+        run_result=result,
+        executor_pod_name="",
+        files={},
+        created_at=datetime.utcnow()
+    )
+    
+    
+    # RunResult(status=command_result, message="", run_result=result, created_at=datetime.utcnow())

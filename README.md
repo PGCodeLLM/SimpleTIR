@@ -120,6 +120,8 @@ bash train.sh \
   --sp_size 2
 ```
 
+export RAY_memory_usage_threshold=1.0
+
 To evaluate a trained checkpoint, please convert the checkpoint into huggingface format using `scripts/model_merger.sh`.
 
 ## Acknowledgement

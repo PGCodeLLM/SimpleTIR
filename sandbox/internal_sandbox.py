@@ -8,7 +8,7 @@ from sandbox_fusion import (
 
 
 async def single_sandbox(
-    code, stdin: str = None, language="python", compile_timeout=1.0, run_timeout=3.0, semaphore=None
+    code, stdin: str = "", language="python", compile_timeout=1.0, run_timeout=3.0, semaphore=None
 ):
     request = RunCodeRequest(
         code=code,
@@ -18,15 +18,20 @@ async def single_sandbox(
         run_timeout=run_timeout,
     )
     async with semaphore:
-        response = await run_code_async(request, client_timeout=30.0, max_attempts=2)
-        response = response.dict()
+        try:
+            response = await run_code_async(request, client_timeout=30.0, max_attempts=2)
+            response = response.dict()
+        except Exception as ex:
+            print(f"Exception {ex}")
     await asyncio.sleep(2)
     return response
 
 
-async def parallel_sandbox(tasks, stdin_list=None, num_processes=200):
+async def parallel_sandbox(tasks, stdin_list=None, num_processes=20):
     semaphore = asyncio.Semaphore(num_processes)
-    set_sandbox_endpoint("https://seed-sandbox.byteintl.net/faas/sandbox/")
+    # set_sandbox_endpoint("https://seed-sandbox.byteintl.net/faas/sandbox/")
+    set_sandbox_endpoint("http://0.0.0.0:8001/faas/sandbox/")
+
     if stdin_list is None:
         tasks_async = [single_sandbox(code, semaphore=semaphore) for code in tasks]
     else:

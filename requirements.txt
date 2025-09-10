@@ -3,7 +3,8 @@ accelerate
 codetiming
 datasets
 dill
-flash-attn
+# flash-attn
+torch==2.6.0
 hydra-core
 liger-kernel
 numpy
@@ -17,5 +18,5 @@ ray[default]
 tensordict<=0.6.2
 torchdata
 transformers
-# vllm==0.6.3.post1
+vllm==0.8.5
 wandb

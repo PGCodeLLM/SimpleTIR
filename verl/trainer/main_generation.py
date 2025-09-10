@@ -45,12 +45,16 @@ def run_generation(config) -> None:
 
     if not ray.is_initialized():
         # this is for local ray cluster
-        ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
+        ray.init(
+            runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}},
+            _memory=800*1000*1000*1024,  # 800GB RAM
+            enable_resource_isolation=True
+        )
 
     ray.get(main_task.remote(config))
 
 
-@ray.remote(num_cpus=1)
+@ray.remote(num_cpus=1, memory=100*1000*1000*1024)
 def main_task(config):
     from pprint import pprint
     from omegaconf import OmegaConf

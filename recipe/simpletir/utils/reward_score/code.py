@@ -89,6 +89,8 @@ def compute_score(solution_str, ground_truth, extra_info):
 
         reward_log.append(solution_str)
 
+        print(f"CODE_LIST {code_list}")
+        print(f"STDIN_LIST {stdin_list}")
         sandbox_success, sandbox_stdout, sandbox_stderr = asyncio.run(
             parallel_sandbox(code_list, stdin_list, num_processes=256)
         )

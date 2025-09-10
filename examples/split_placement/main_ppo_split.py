@@ -93,7 +93,11 @@ from split_monkey_patch import fit
 def main(config):
     if not ray.is_initialized():
         # this is for local ray cluster
-        ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
+        ray.init(
+            runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}},
+            _memory=800*1000*1000*1024,  # 800GB RAM
+            enable_resource_isolation=True
+        )
 
     ray.get(main_task.remote(config))
 

@@ -603,6 +603,8 @@ def final_answer(result):
                 index_mapping.append(i)
 
         if tasks:
+            # print(f"TASKS AgentHelper {tasks}")
+
             sandbox_success, sandbox_stdout, sandbox_stderr = asyncio.run(
                 parallel_sandbox(tasks, num_processes=256)
             )

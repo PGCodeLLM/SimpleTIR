@@ -60,19 +60,23 @@ def run_ppo(config) -> None:
     os.environ["ENSURE_CUDA_VISIBLE_DEVICES"] = os.environ.get('CUDA_VISIBLE_DEVICES', '')
     if not ray.is_initialized():
         # this is for local ray cluster
-        ray.init(runtime_env={
-            'env_vars': {
-                'TOKENIZERS_PARALLELISM': 'true',
-                'NCCL_DEBUG': 'WARN',
-                'VLLM_LOGGING_LEVEL': 'WARN'
-            }
-        })
+        ray.init(
+            runtime_env={
+                'env_vars': {
+                    'TOKENIZERS_PARALLELISM': 'true',
+                    'NCCL_DEBUG': 'WARN',
+                    'VLLM_LOGGING_LEVEL': 'WARN'
+                }
+            },
+            _memory=800*1000*1000*1024,  # 800GB RAM
+            enable_resource_isolation=True
+        )
 
     runner = TaskRunner.remote()
     ray.get(runner.run.remote(config))
 
 
-@ray.remote(num_cpus=1)  # please make sure main_task is not scheduled on head
+@ray.remote(num_cpus=1, memory=100*1000*1000*1024)  # please make sure main_task is not scheduled on head
 class TaskRunner:
 
     def run(self, config):
