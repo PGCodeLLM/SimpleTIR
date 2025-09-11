@@ -121,6 +121,8 @@ bash train.sh \
 ```
 
 export RAY_memory_usage_threshold=1.0
+pip install word2number
+pip install math_verify
 
 To evaluate a trained checkpoint, please convert the checkpoint into huggingface format using `scripts/model_merger.sh`.
 

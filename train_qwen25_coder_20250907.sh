@@ -3,7 +3,7 @@ DATA_PATH=./datasets \
 CHECKPOINT_PATH=./checkpoints \
 LOG_PATH=./logs \
 NNODES=1 \
-GPUS_PER_NODE=4 \
+GPUS_PER_NODE=8 \
 RESUME=False \
 CONFIG_NAME=simpletir_trainer \
 bash train.sh \
