@@ -121,7 +121,7 @@ class RLCustomPromptDataset(RLHFDataset):
                 dataframe = load_dataset(local_path, split="train")
                 dataframe = dataframe.to_pandas()
                 sp = local_path.split("/")
-                dataframe["data_source"] = f"{sp[-3]}/{sp[-1]}".lower()
+                dataframe["data_source"] = f"{sp[-3]}/{sp[-1]}/code".lower()
                 dataframe = dataframe.apply(transTaco, axis=1)
                 print("finsihed transfer for taco")
                 print(dataframe.iloc[0])
