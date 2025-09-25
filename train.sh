@@ -11,8 +11,8 @@ MAX_OBS_LENGTH=256
 PPO_MINI_BATCH_SIZE=512
 PPO_MICRO_TOKEN=24000
 TOTAL_EPOCHS=100
-TRAIN_DATASET=("simplelr_math_35/train")
-VALID_DATASET=("simplelr_math_35/test" "deepscaler/aime" "deepscaler/aime25")
+TRAIN_DATASET=("simplelr_math_35/train.parquet")
+VALID_DATASET=("simplelr_math_35/test.parquet" "deepscaler/aime.parquet" "deepscaler/aime25.parquet")
 ROLLOUT_GPU_MEMORY_UTIL=0.75
 ACTOR_OPTIMIZER_OFFLOAD=False
 ACTOR_PARAMETER_OFFLOAD=False
@@ -185,7 +185,8 @@ if [ ${#TRAIN_DATASET[@]} -gt 0 ]; then
 fi
 
 RUN_NAME+="$train_dataset_str"
-RUN_NAME+="_$MODEL_NAME"
+RUN_NAME="${MODEL_NAME}${RUN_NAME}"
+LOG_FILE_PATH=$LOG_PATH/$RUN_NAME.log
 
 echo "RUN_NAME: $RUN_NAME"
 echo "LOG_FILE_PATH: $LOG_FILE_PATH"
@@ -233,9 +234,12 @@ format_dataset_paths() {
   local formatted_paths=""
 
   for dataset_path in "${dataset[@]}"; do
-    formatted_paths+='"'${DATA_PATH}'/'"$dataset_path"'.parquet",'
+    if [[ "$dataset_path" == /* ]]; then
+      formatted_paths+="\"$dataset_path\","  
+    else
+      formatted_paths+="\"${DATA_PATH}/${dataset_path}\","  
+    fi
   done
-
   formatted_paths="${formatted_paths%,}"
 
   echo "[$formatted_paths]"

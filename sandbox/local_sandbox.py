@@ -4,6 +4,7 @@ import random
 from typing import List, Tuple
 import aiohttp
 import os
+import json
 
 
 async def _post_snippet(endpoint: str, payload: dict, *, client_timeout: float = 30.0) -> dict:
@@ -120,6 +121,7 @@ async def parallel_sandbox(
 
 if __name__ == "__main__":
     code_list = ["""
+import abc
 def fib(n):
     a, b = 0, 1
     for _ in range(n):
@@ -148,3 +150,24 @@ print(f"Hi, {name}!")
         print(f"sandbox_success: {sandbox_success}")
         print(f"sandbox_stdout: {sandbox_stdout}")
         print(f"sandbox_stderr: {sandbox_stderr} {sandbox_stderr[0].splitlines()[-1:]}")
+    
+    json_path = "/shared_workspace/yanruo/data/Public_RL/Taco/split/0-codeforces-MEDIUM.json"
+    jd = json.load(open(json_path))
+    code = json.loads(jd["solutions"])[0]
+    input_output = json.loads(jd["input_output"].replace("\\n", ""))
+    input = input_output["inputs"]
+    output = input_output["outputs"]
+    print(code)
+    print(("==========="))
+    # print(input_output)
+
+    sandbox_success, sandbox_stdout, sandbox_stderr = asyncio.run(parallel_sandbox(tasks=[code] * len(input), stdin_list=input))
+
+    # print(f"sandbox_success: {sandbox_success}")
+    # print(f"sandbox_stdout: {sandbox_stdout}")
+    # print(f"sandbox_stderr: {sandbox_stderr} {sandbox_stderr[0].splitlines()[-1:]}")
+    match_count = 0
+    for i, stdout in enumerate(sandbox_stdout):
+        match_count += output[i] == stdout.strip()
+    
+    print(match_count, len(output))

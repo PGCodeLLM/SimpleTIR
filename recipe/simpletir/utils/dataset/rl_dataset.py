@@ -19,10 +19,35 @@ from typing import List, Optional, Union
 import pandas as pd
 from omegaconf import ListConfig
 from transformers import PreTrainedTokenizer, ProcessorMixin
+from datasets import load_dataset
+import json
 
 import verl.utils.torch_functional as verl_F
 from verl.utils.dataset.rl_dataset import RLHFDataset, process_image
 from verl.utils.model import compute_position_id_with_mask
+
+
+def transTaco(row):
+    row["prompt"] = [{
+        "content": row["question"],
+        "role": "user",
+    }]
+    row["reward_model"] = {
+        "ground_truth": row["input_output"],
+        "style": "code"
+    }
+    return row
+
+def transPrimeRL(row):
+    row["prompt"] = [{
+        "content": row["prompt"].split("Write Python code to solve the problem. Present the code in")[0],
+        "role": "user",
+    }]
+    row["reward_model"] = {
+        "ground_truth": json.loads(row["verification_info"])["test_cases"],
+        "style": "code"
+    }
+    return row
 
 
 class RLCustomPromptDataset(RLHFDataset):
@@ -81,11 +106,34 @@ class RLCustomPromptDataset(RLHFDataset):
         dataframes = []
         for parquet_file in self.parquet_files:
             # read parquet files and cache
-            dataframe = pd.read_parquet(parquet_file)
-            parquet_file_name = "/".join(parquet_file.split("/")[-2:])
-            dataframe["data_source"] = dataframe["data_source"].apply(
-                lambda x: parquet_file_name
-            )
+            print(f"loading dataset from {parquet_file}")
+            if "prime" in parquet_file.lower():
+                dataframe = pd.read_parquet(parquet_file)
+                dataframe = dataframe[dataframe["verification_info"].str.contains("test_cases", na=False)]
+                dataframe.apply(transPrimeRL, axis=1)
+                dataframe["data_source"] = "primerl/code"
+                print("finsihed transfer for primerl")
+                print(dataframe.iloc[0])
+                
+
+            elif "taco" in parquet_file.lower():
+                local_path = parquet_file
+                dataframe = load_dataset(local_path, split="train")
+                dataframe = dataframe.to_pandas()
+                sp = local_path.split("/")
+                dataframe["data_source"] = f"{sp[-3]}/{sp[-1]}".lower()
+                dataframe = dataframe.apply(transTaco, axis=1)
+                print("finsihed transfer for taco")
+                print(dataframe.iloc[0])
+            
+            elif parquet_file.endswith(".parquet"):
+                dataframe = pd.read_parquet(parquet_file)
+                parquet_file_name = "/".join(parquet_file.split("/")[-2:])
+                dataframe["data_source"] = dataframe["data_source"].apply(
+                    lambda x: parquet_file_name
+                )
+            print(f"dataset len: {len(dataframe)} from {parquet_file}")
+
             if self.sample_size is not None and len(dataframe) > self.sample_size:
                 # use random state to ensure it can be reproducible
                 dataframe = dataframe.sample(n=self.sample_size, random_state=42)

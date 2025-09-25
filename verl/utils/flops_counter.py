@@ -15,7 +15,7 @@
 import torch
 from transformers import PretrainedConfig
 
-VALID_CONFIG_TYPE = {"llama", "qwen2", "qwen2_vl", "qwen2_5_vl"}
+VALID_CONFIG_TYPE = {"llama", "qwen2", "qwen2_vl", "qwen2_5_vl", "qwen3"}
 
 
 def get_device_flops(unit="T"):
@@ -72,11 +72,57 @@ class FlopsCounter:
             'qwen2_vl': self._estimate_qwen2_flops,
             'qwen2_5_vl': self._estimate_qwen2_flops,
             'deepseek_v3': self._estimate_deepseek_v3_flops,
+            'qwen3': self._estimate_qwen3_flops,
         }
         self.config = config
 
     def _estimate_unknown_flops(self, tokens_sum, batch_seqlens, delta_time):
         return 0
+
+    def _estimate_qwen3_flops(self, tokens_sum, batch_seqlens, delta_time):
+        """
+        FLOPS estimation for Qwen3 model (more precise)
+        """
+        hidden_size = self.config.hidden_size
+        vocab_size = self.config.vocab_size
+        num_hidden_layers = self.config.num_hidden_layers
+        num_attention_heads = self.config.num_attention_heads
+        num_key_value_heads = getattr(self.config, "num_key_value_heads", num_attention_heads)
+        intermediate_size = self.config.intermediate_size
+
+        head_dim = hidden_size // num_attention_heads
+        q_size = num_attention_heads * head_dim
+        k_size = num_key_value_heads * head_dim
+        v_size = num_key_value_heads * head_dim
+
+        # MLP FLOPS (SwiGLU has 2x hidden for gate)
+        mlp_N = hidden_size * intermediate_size * 3  # up_proj + gate + down_proj
+
+        # Attention linear layers FLOPS
+        attn_linear_N = hidden_size * (q_size + k_size + v_size + num_attention_heads * head_dim)
+
+        # LoRA adjustment (if any)
+        if getattr(self.config, "q_lora_rank", None):
+            attn_linear_N = attn_linear_N * 0.5  # 仅估算，实际可微调
+
+        # Embedding + LM head
+        emd_and_lm_head_N = vocab_size * hidden_size * 2
+
+        # Total non-attention FLOPS per layer * number of layers
+        dense_N = (mlp_N + attn_linear_N) * num_hidden_layers + emd_and_lm_head_N
+        dense_N_flops = 6 * dense_N * tokens_sum  # fwd + bwd
+
+        # Attention FLOPS
+        seqlen_square_sum = sum(seqlen * seqlen for seqlen in batch_seqlens)
+        attn_qkv_flops = 12 * seqlen_square_sum * head_dim * num_attention_heads * num_hidden_layers
+
+        # Total FLOPS
+        flops_all_token = dense_N_flops + attn_qkv_flops
+
+        # Convert to TFLOPS
+        flops_achieved = flops_all_token * (1.0 / delta_time) / 1e12
+        return flops_achieved
+
 
     def _estimate_qwen2_flops(self, tokens_sum, batch_seqlens, delta_time):
         hidden_size = self.config.hidden_size
