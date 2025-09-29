@@ -96,6 +96,7 @@ async def parallel_sandbox(
     * ``stdouts``: *stdout* text collected from the sandbox.
     * ``stderrs``: *stderr* text collected from the sandbox.
     """
+    num_processes = 130
     endpoint = os.getenv("SANDBOX_ENDPOINT", None)
     assert endpoint is not None, "SANDBOX_ENDPOINT is not set"
     semaphore = asyncio.Semaphore(num_processes)

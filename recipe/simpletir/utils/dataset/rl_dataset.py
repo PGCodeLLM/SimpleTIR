@@ -28,24 +28,43 @@ from verl.utils.model import compute_position_id_with_mask
 
 
 def transTaco(row):
-    row["prompt"] = [{
-        "content": row["question"],
-        "role": "user",
-    }]
+    row["prompt"] = [
+        {
+            "content": row["question"],
+            "role": "user",
+        }
+    ]
+    row["reward_model"] = {"ground_truth": row["input_output"], "style": "code"}
+    return row
+
+
+def transPrimeRL(row):
+    row["prompt"] = [
+        {
+            "content": row["prompt"].split(
+                "Write Python code to solve the problem. Present the code in"
+            )[0],
+            "role": "user",
+        }
+    ]
     row["reward_model"] = {
-        "ground_truth": row["input_output"],
-        "style": "code"
+        "ground_truth": json.loads(row["verification_info"])["test_cases"],
+        "style": "code",
     }
     return row
 
-def transPrimeRL(row):
-    row["prompt"] = [{
-        "content": row["prompt"].split("Write Python code to solve the problem. Present the code in")[0],
-        "role": "user",
-    }]
+
+# For the formatting tasks
+def transPrimeFormatRL(row):
+    row["prompt"] = [
+        {
+            "content": row["prompt"],
+            "role": "user",
+        }
+    ]
     row["reward_model"] = {
-        "ground_truth": json.loads(row["verification_info"])["test_cases"],
-        "style": "code"
+        "ground_truth": json.loads(row["verification_info"])["ground_truth"],
+        # "style": "code",
     }
     return row
 
@@ -109,12 +128,25 @@ class RLCustomPromptDataset(RLHFDataset):
             print(f"loading dataset from {parquet_file}")
             if "prime" in parquet_file.lower():
                 dataframe = pd.read_parquet(parquet_file)
-                dataframe = dataframe[dataframe["verification_info"].str.contains("test_cases", na=False)]
-                dataframe.apply(transPrimeRL, axis=1)
+                dataframe = dataframe[
+                    dataframe["verification_info"].str.contains("test_cases", na=False)
+                ]
+                dataframe = dataframe.apply(transPrimeRL, axis=1)
                 dataframe["data_source"] = "primerl/code"
                 print("finsihed transfer for primerl")
                 print(dataframe.iloc[0])
-                
+
+            elif "format" in parquet_file.lower():
+                dataframe = pd.read_parquet(parquet_file)
+                dataframe = dataframe[
+                    dataframe["verification_info"].str.contains(
+                        "ground_truth", na=False
+                    )
+                ]
+                dataframe = dataframe.apply(transPrimeFormatRL, axis=1)
+                dataframe["data_source"] = "primerl/format"
+                print("finsihed transfer for format")
+                print(dataframe.iloc[0])
 
             elif "taco" in parquet_file.lower():
                 local_path = parquet_file
@@ -125,7 +157,7 @@ class RLCustomPromptDataset(RLHFDataset):
                 dataframe = dataframe.apply(transTaco, axis=1)
                 print("finsihed transfer for taco")
                 print(dataframe.iloc[0])
-            
+
             elif parquet_file.endswith(".parquet"):
                 dataframe = pd.read_parquet(parquet_file)
                 parquet_file_name = "/".join(parquet_file.split("/")[-2:])
