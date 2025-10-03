@@ -20,3 +20,5 @@ torchdata
 transformers
 vllm==0.8.5
 wandb
+math-verify
+word2number

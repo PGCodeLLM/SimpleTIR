@@ -139,7 +139,15 @@ async def _run_in_firejail(code: str, timeout: float, stdin_data: str = "") -> d
         )
         print(f"EXECUTION ==== {stdout} {stderr} {proc.returncode}")
     except asyncio.TimeoutError:
-        proc.kill()
+
+
+        ## TODO: check if this solves the process lookup to kill error 
+        try: 
+            proc.kill()
+        except ProcessLookupError:
+            print("="*20 + "process already exited"+ "="*20)
+            pass
+
         await proc.wait()
         shutil.rmtree(workdir, ignore_errors=True)
         return RunStatus.Failed, {
