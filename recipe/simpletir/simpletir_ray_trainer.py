@@ -321,6 +321,7 @@ class RaySimpleTIRTrainer(RayPPOTrainer):
         processor=None,
         reward_fn=None,
         val_reward_fn=None,
+        device_name=None,
     ):
         # assert torch.cuda.is_available(), 'cuda must be available on driver'
 
@@ -343,6 +344,7 @@ class RaySimpleTIRTrainer(RayPPOTrainer):
         self.use_reference_policy = Role.RefPolicy in role_worker_mapping
         self.use_rm = Role.RewardModel in role_worker_mapping
         self.ray_worker_group_cls = ray_worker_group_cls
+        self.device_name = device_name if device_name else config.trainer.device
 
         # register wandb generation logger
         self.validation_generations_logger = {}

@@ -23,7 +23,8 @@ from datasets import load_dataset
 import json
 
 import verl.utils.torch_functional as verl_F
-from verl.utils.dataset.rl_dataset import RLHFDataset, process_image
+# from verl.utils.dataset.rl_dataset import RLHFDataset, process_image
+from verl.utils.dataset.rl_dataset import RLHFDataset
 from verl.utils.model import compute_position_id_with_mask
 
 
@@ -93,37 +94,45 @@ class RLCustomPromptDataset(RLHFDataset):
         sample_size=None,
         filter_overlong_prompts=True,
     ):
-        if not isinstance(parquet_files, (List, ListConfig)):
-            parquet_files = [parquet_files]
+        from omegaconf import DictConfig
 
-        self.parquet_files = copy.deepcopy(parquet_files)
-        self.original_parquet_files = copy.deepcopy(parquet_files)  # use for resume
-        self.cache_dir = os.path.expanduser(cache_dir)
-        self.tokenizer = tokenizer
-        self.processor = processor
-
-        self.prompt_key = prompt_key
+        # RLCustomPromptDataset has some specific attributes not in the base class config
         self.prompt = prompt
-        self.image_key = image_key
-        self.max_prompt_length = max_prompt_length
-        self.filter_prompts = filter_prompts
-
-        self.return_raw_chat = return_raw_chat
-        self.chat_template_func = chat_template_func
         self.apply_chat_template = apply_chat_template
-        self.truncation = truncation
         self.sample_size = sample_size
-        self.filter_overlong_prompts = filter_overlong_prompts
 
-        # whether to store the dataset in state_dict()
-        # default not store
-        self.serialize_dataset = False
-        self._download()
-        self._read_files_and_tokenize()
+        # The base class RLHFDataset expects a DictConfig object for configuration.
+        # We create one from the arguments passed to this constructor.
+        config = DictConfig(
+            {
+                "cache_dir": cache_dir,
+                "prompt_key": prompt_key,
+                "image_key": image_key,
+                "max_prompt_length": max_prompt_length,
+                "filter_prompts": filter_prompts,
+                "chat_template_func": chat_template_func,
+                "return_raw_chat": return_raw_chat,
+                "truncation": truncation,
+                "filter_overlong_prompts": filter_overlong_prompts,
+            }
+        )
+
+        # We are calling super().__init__ which will call _download and _read_files_and_tokenize.
+        # RLCustomPromptDataset overrides _read_files_and_tokenize with its own implementation.
+        # The original __init__ of RLCustomPromptDataset was not calling super().__init__
+        # and was setting up attributes itself, leading to incompatibility.
+        super().__init__(
+            data_files=parquet_files,
+            tokenizer=tokenizer,
+            config=config,
+            processor=processor,
+        )
 
     def _read_files_and_tokenize(self):
         dataframes = []
-        for parquet_file in self.parquet_files:
+        print(f"DATA FILES {self.data_files}")
+        breakpoint()
+        for parquet_file in self.data_files:
             # read parquet files and cache
             print(f"loading dataset from {parquet_file}")
             if "prime" in parquet_file.lower():
@@ -231,11 +240,11 @@ class RLCustomPromptDataset(RLHFDataset):
             raw_prompt = prompt_with_chat_template.replace(
                 "<image>", "<|vision_start|><|image_pad|><|vision_end|>"
             )
-            row_dict["multi_modal_data"] = {
-                "image": [
-                    process_image(image) for image in row_dict.pop(self.image_key)
-                ]
-            }
+            # row_dict["multi_modal_data"] = {
+            #     "image": [
+            #         process_image(image) for image in row_dict.pop(self.image_key)
+            #     ]
+            # }
             image_inputs = self.processor.image_processor(
                 row_dict["multi_modal_data"]["image"], return_tensors="pt"
             )

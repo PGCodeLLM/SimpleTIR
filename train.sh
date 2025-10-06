@@ -304,6 +304,7 @@ PYTHONUNBUFFERED=1 python -m recipe.simpletir.main_simpletir \
     data.max_obs_length=$MAX_OBS_LENGTH \
     actor_rollout_ref.actor.mask_tool_output=$TOOL_USE \
     actor_rollout_ref.actor.mask_void_turns=$MASK_VOID_TURNS \
-    +trainer.val_only=$VAL_ONLY \
+    actor_rollout_ref.rollout.name=vllm \
+    +model.trust_remote_code=True \
     +trainer.output_acc_to_file=$OUTPUT_ACC_TO_FILE \
     | tee -a $LOG_FILE_PATH
