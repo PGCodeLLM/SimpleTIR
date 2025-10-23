@@ -108,7 +108,7 @@ async def _run_in_firejail(code: str, timeout: float, stdin_data: str = "") -> d
     cmd = [
         "firejail",
         "--quiet",
-        "--profile=/etc/firejail/python.profile",
+        "--profile=/shared_workspace_mfs/deploy/python.profile",
         f"--private={workdir}",
         "--net=none",              # disable network
         "--",
